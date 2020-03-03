@@ -52,7 +52,7 @@ public class MainActivity extends AppCompatActivity {
         super.onResume();
 
         // Thread to append data
-
+    /*
         new Thread(new Runnable() {
             @Override
             public void run(){
@@ -73,7 +73,7 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
         }).start();
-
+*/
 
     }
 
@@ -83,14 +83,14 @@ public class MainActivity extends AppCompatActivity {
 
         // From https://developer.android.com/training/volley/simple
         RequestQueue queue = Volley.newRequestQueue(this);
-        String url = "https://projrush-env.takuddxgcj.us-east-2.elasticbeanstalk.com/Average";
+        String url = "http://projrush-env.takuddxgcj.us-east-2.elasticbeanstalk.com/Average";
 
         // Request builder
         StringRequest stringRequest = new StringRequest(Request.Method.GET, url,
                 new Response.Listener<String>() {
                     @Override
                     public void onResponse(String response) {
-                        avgDisplay.setText("Response: " + response.substring(0, 500));
+                        avgDisplay.setText("Response: " + response);
                     }
                 }, new Response.ErrorListener() {
             @Override
