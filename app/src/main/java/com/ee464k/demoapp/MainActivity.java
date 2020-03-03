@@ -5,8 +5,17 @@ import androidx.appcompat.app.AppCompatActivity;
 import android.content.Intent;
 import android.os.Bundle;
 import android.view.View;
+import android.widget.Button;
 import android.widget.EditText;
+import android.widget.TextView;
+import android.widget.Toast;
 
+import com.android.volley.Request;
+import com.android.volley.RequestQueue;
+import com.android.volley.Response;
+import com.android.volley.VolleyError;
+import com.android.volley.toolbox.StringRequest;
+import com.android.volley.toolbox.Volley;
 import com.ee464k.demoapp.R;
 import com.jjoe64.graphview.GraphView;
 import com.jjoe64.graphview.Viewport;
@@ -16,7 +25,6 @@ import com.jjoe64.graphview.series.LineGraphSeries;
 import java.util.Random;
 
 public class MainActivity extends AppCompatActivity {
-    public static final String EXTRA_MESSAGE = "cgom.example.myfirstapp.MESSAGE";
     private static final Random RANDOM = new Random();
     private LineGraphSeries<DataPoint> series;
     private int lastX = 0;
@@ -44,6 +52,7 @@ public class MainActivity extends AppCompatActivity {
         super.onResume();
 
         // Thread to append data
+
         new Thread(new Runnable() {
             @Override
             public void run(){
@@ -64,6 +73,41 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
         }).start();
+
+
+    }
+
+
+    public void getAverages(View view) {
+        final TextView avgDisplay = (TextView) findViewById(R.id.averageDisplay);
+
+        // From https://developer.android.com/training/volley/simple
+        RequestQueue queue = Volley.newRequestQueue(this);
+        String url = "https://projrush-env.takuddxgcj.us-east-2.elasticbeanstalk.com/Average";
+
+        // Request builder
+        StringRequest stringRequest = new StringRequest(Request.Method.GET, url,
+                new Response.Listener<String>() {
+                    @Override
+                    public void onResponse(String response) {
+                        avgDisplay.setText("Response: " + response.substring(0, 500));
+                    }
+                }, new Response.ErrorListener() {
+            @Override
+            public void onErrorResponse(VolleyError error) {
+                avgDisplay.setText(error.toString());
+            }
+
+        });
+
+        queue.add(stringRequest);
+    }
+
+
+    public void submitSession(View view){
+        Toast submissionNotify = Toast.makeText(this, "Profile submitted", Toast.LENGTH_SHORT);
+        submissionNotify.show();
+
     }
 
     private void addEntry(){
