@@ -149,28 +149,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected  void onResume(){
         super.onResume();
-        // Thread to append data
-        new Thread(new Runnable() {
-            @Override
-            public void run(){
-                while(true){
-                    runOnUiThread(new Runnable() {
-                        @Override
-                        public void run(){
-                            addEntry();
-                        }
-                    });
-
-                    try{
-                        Thread.sleep(700);
-                    } catch(InterruptedException e){
-                        e.printStackTrace();
-                    }
-
-                }
-            }
-        }).start();
-
+        
     }
 
 
