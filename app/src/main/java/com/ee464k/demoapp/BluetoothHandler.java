@@ -11,7 +11,7 @@ import java.util.UUID;
 
 public class BluetoothHandler {
     public String address;
-    public UUID MY_UUID = UUID.fromString("123");
+    public UUID MY_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
     String TAG = "BLHandler";
     public BluetoothDevice hardwareBT = null;
     public Set<BluetoothDevice> pairedDevices;

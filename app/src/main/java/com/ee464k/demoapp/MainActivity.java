@@ -3,6 +3,7 @@ package com.ee464k.demoapp;
 import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AppCompatActivity;
 
+import android.annotation.SuppressLint;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothSocket;
@@ -52,17 +53,17 @@ import java.util.concurrent.ThreadLocalRandom;
 
 public class MainActivity extends AppCompatActivity {
 
-    private LineGraphSeries<DataPoint> series;
+    private LineGraphSeries<DataPoint> spo2_series, ppg_series, bodytemp_series, ecg_series;
     private int lastX = 0;
     private double generatedIndex = 0;
     private final String TAG = "MainActivity";
-    private final String address = "1";
+    private final String address = "AC:EE:9E:63:FB:8B"; // MAC address for my other android device, replace with HC-05 address in final version
     public UUID MY_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
     public int DATA_IN = 1;
-    Handler bluetoothRead;
-    public StringBuilder dataString;
+    public static Handler bluetoothRead;
 
 
+    @SuppressLint("HandlerLeak")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -81,31 +82,15 @@ public class MainActivity extends AppCompatActivity {
                     //  "ECG": 509
                     //}
                     // JSON obect to JSON string format:
-                    String sensorData = "{\"TimeStamp\":12,\"Sp02\":34,\"PPG_HR\":56,\"BodyTemperature\":24.35,\"ECG\":509}";//(String) msg.obj;
-                    try {
-                        // Convert string to JSON Object
-                        JSONObject jObject = new JSONObject(sensorData);
-                        // Get seperate values from key/labels and put them into integers
-                        int timeStamp = jObject.getInt("TimeStamp");
-                        int Sp02 = jObject.getInt("Sp02");
-                        int PPG_HR = jObject.getInt("PPG_HR");
-                        int bodyTemperature = jObject.getInt("BodyTemperature");
-                        int ecg = jObject.getInt("ECG");
-                        // Here we would append each value to its appropriate string
-                        // ***TESTING***
-                        // SCREEN OUTPUT SHOULD BE: 123456
-                        dataString = new StringBuilder();
-                        dataString.append(Integer.toString(timeStamp));
-                        dataString.append(Integer.toString(Sp02));
-                        dataString.append(Integer.toString(PPG_HR));
-                        // ***TESTING***
-                        // TEST PASSED
-                    } catch (JSONException e) {
-                        e.printStackTrace();
-                    }
-                    // Parse dataString for our sensor data
-                   // message.setText(dataString);
-                    //dataString.delete(0, dataString.length());
+                        String sensorJSON = (String) msg.obj;
+                        Log.d("SensorGot", sensorJSON );
+                        SensorData sensorData = new SensorData(sensorJSON);
+                        Log.d("SensorGet", "Sensor JSON : " + sensorData);
+
+                        addEntries(sensorData);
+
+
+
                 }
             }
         };
@@ -126,30 +111,70 @@ public class MainActivity extends AppCompatActivity {
         // Get device we want
         BluetoothHandler BTsetup = new BluetoothHandler(address, pairedDevices);
         BluetoothDevice device = BTsetup.getDevice();
+        Log.d("BluetoothConnect", "Device connected is : " + device.getName());
 
 
-        // GraphView practice block
-        GraphView graph = (GraphView) findViewById(R.id.graph);
-        graph.setTitle("Stress Score");
-        series = new LineGraphSeries<>();
-        graph.addSeries(series);
+        // Get all the graph views
+        GraphView spo2_graph = (GraphView) findViewById(R.id.spo2);
+        GraphView ppg_graph = (GraphView) findViewById(R.id.ppg_hr);
+        GraphView bodytemp_graph = (GraphView) findViewById(R.id.bodytemp);
+        GraphView ecg_graph = (GraphView) findViewById(R.id.ecg);
+
+        // Set up each graph w/ it's series
+        spo2_graph.setTitle("SPO2");
+        spo2_series = new LineGraphSeries<>();
+        spo2_graph.addSeries(spo2_series);
+
+        ppg_graph.setTitle("PPG");
+        ppg_series = new LineGraphSeries<>();
+        ppg_graph.addSeries(ppg_series);
+
+        bodytemp_graph.setTitle("Body Temp");
+        bodytemp_series = new LineGraphSeries<>();
+        bodytemp_graph.addSeries(bodytemp_series);
+
+        ecg_graph.setTitle("ECG");
+        ecg_series = new LineGraphSeries<>();
+        ecg_graph.addSeries(ecg_series);
 
         // ViewPort customization
-        Viewport viewport = graph.getViewport();
-        viewport.setXAxisBoundsManual(true);
-        viewport.setMinX(0);
-        viewport.setMaxX(10);
-        viewport.setScrollable(true);
+        Viewport spo2viewport = spo2_graph.getViewport();
+        spo2viewport.setXAxisBoundsManual(true);
+        spo2viewport.setMinX(0);
+        spo2viewport.setMaxX(10);
+        spo2viewport.setScrollable(true);
+
+        Viewport ppgviewport = ppg_graph.getViewport();
+        ppgviewport.setXAxisBoundsManual(true);
+        ppgviewport.setMinX(0);
+        ppgviewport.setMaxX(10);
+        ppgviewport.setScrollable(true);
+
+        Viewport bodytempviewport = bodytemp_graph.getViewport();
+        bodytempviewport.setXAxisBoundsManual(true);
+        bodytempviewport.setMinX(0);
+        bodytempviewport.setMaxX(10);
+        bodytempviewport.setScrollable(true);
+
+        Viewport ecgviewport = ecg_graph.getViewport();
+        ecgviewport.setXAxisBoundsManual(true);
+        ecgviewport.setMinX(0);
+        ecgviewport.setMaxX(10);
+        ecgviewport.setScrollable(true);
 
         // Set index
         final TextView indexSubmit = (TextView) findViewById(R.id.indexDisplay);
         indexSubmit.setText(Double.toString(generatedIndex));
+
+        // Start BT connection
+        ConnectThread connect = new ConnectThread(device);
+        connect.start();
     }
 
     @Override
     protected  void onResume(){
         super.onResume();
-        
+
     }
 
 
@@ -273,8 +298,12 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
-    private void addEntry(){
-        series.appendData(new DataPoint(lastX++, 1), true, 10);
+    private void addEntries(SensorData data){
+        spo2_series.appendData(new DataPoint(lastX, data.spo2), true, 10);
+        ppg_series.appendData(new DataPoint(lastX, data.ppg_hr), true, 10);
+        bodytemp_series.appendData(new DataPoint(lastX, data.bodytemp), true, 10);
+        ecg_series.appendData(new DataPoint(lastX, data.ecg), true, 10);
+        lastX++;
     }
 
     private class ConnectThread extends Thread{
