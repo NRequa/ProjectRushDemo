@@ -47,6 +47,9 @@ public class SensorData {
 
     @Override
     public String toString(){
+        if(this == null){
+            return "NULL";
+        }
         return "{" + timestamp + ", " + spo2 + ", " + ppg_hr + ", " + bodytemp + ", " + ecg + "}";
     }
 }

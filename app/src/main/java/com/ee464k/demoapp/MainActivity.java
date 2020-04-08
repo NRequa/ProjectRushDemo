@@ -29,7 +29,6 @@ import com.android.volley.VolleyLog;
 import com.android.volley.toolbox.HttpHeaderParser;
 import com.android.volley.toolbox.StringRequest;
 import com.android.volley.toolbox.Volley;
-import com.ee464k.demoapp.R;
 import com.jjoe64.graphview.GraphView;
 import com.jjoe64.graphview.Viewport;
 import com.jjoe64.graphview.series.DataPoint;
@@ -38,17 +37,14 @@ import com.jjoe64.graphview.series.LineGraphSeries;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
-import org.w3c.dom.Text;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.UnsupportedEncodingException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadLocalRandom;
 
 public class MainActivity extends AppCompatActivity {
@@ -61,6 +57,9 @@ public class MainActivity extends AppCompatActivity {
     public UUID MY_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
     public int DATA_IN = 1;
     public static Handler bluetoothRead;
+    private Runnable updateEntries;
+    int postNum;
+    public LinkedBlockingQueue<SensorData> sensorDataBuffer;
 
 
     @SuppressLint("HandlerLeak")
@@ -68,6 +67,7 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        sensorDataBuffer = new LinkedBlockingQueue<SensorData>();
 
         // Create handler to update UI and store data
         bluetoothRead = new Handler() {
@@ -82,11 +82,13 @@ public class MainActivity extends AppCompatActivity {
                     //  "ECG": 509
                     //}
                     // JSON obect to JSON string format:
+                    /*
                         String sensorJSON = (String) msg.obj;
                         Log.d("SensorGot", sensorJSON );
                         SensorData sensorData = new SensorData(sensorJSON);
                         Log.d("SensorGet", "Sensor JSON : " + sensorData);
-
+                */
+                        SensorData sensorData = (SensorData) msg.obj;
                         addEntries(sensorData);
 
 
@@ -299,11 +301,36 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void addEntries(SensorData data){
-        spo2_series.appendData(new DataPoint(lastX, data.spo2), true, 10);
-        ppg_series.appendData(new DataPoint(lastX, data.ppg_hr), true, 10);
-        bodytemp_series.appendData(new DataPoint(lastX, data.bodytemp), true, 10);
-        ecg_series.appendData(new DataPoint(lastX, data.ecg), true, 10);
-        lastX++;
+        if(data != null) {
+            spo2_series.appendData(new DataPoint(lastX, data.spo2), true, 10);
+            ppg_series.appendData(new DataPoint(lastX, data.ppg_hr), true, 10);
+            bodytemp_series.appendData(new DataPoint(lastX, data.bodytemp), true, 10);
+            ecg_series.appendData(new DataPoint(lastX, data.ecg), true, 10);
+            lastX++;
+        }
+    }
+
+    // Handles retrieving sensor data and updating the
+    private class BufferReader extends Thread{
+        @Override
+        public void run() {
+            int timer = 0;
+            while(true){
+                SensorData graphSensorInfo = sensorDataBuffer.poll();
+                if(graphSensorInfo != null) {
+                    Log.d("Buffer", "Sensor Data from Q: " + graphSensorInfo.toString());
+                }
+                Message readMsg = bluetoothRead.obtainMessage(DATA_IN, graphSensorInfo);
+                bluetoothRead.sendMessage(readMsg);
+                try {
+                    Thread.sleep(180);
+                } catch(InterruptedException e){
+                    Log.e(TAG, "Buffer reader thread interrupted.", e);
+                }
+
+
+            }
+        }
     }
 
     private class ConnectThread extends Thread{
@@ -353,6 +380,8 @@ public class MainActivity extends AppCompatActivity {
 
         private void manageMyConnectedSocket(BluetoothSocket socket){
             ConnectedThread receiveThread = new ConnectedThread(socket);
+            Log.d("RunnablePost", "Program start at: " + System.currentTimeMillis());
+
             receiveThread.start();
         }
     }
@@ -362,6 +391,7 @@ public class MainActivity extends AppCompatActivity {
         private final InputStream mmInStream;
         private final OutputStream mmOutStream;
         private byte[] mmBuffer;
+        String sensorJSON;
 
         public ConnectedThread(BluetoothSocket socket){
             mmSocket = socket;
@@ -386,16 +416,26 @@ public class MainActivity extends AppCompatActivity {
         public void run(){
             mmBuffer = new byte[1024];
             int numBytes;
-
+            BufferReader uiRunner = new BufferReader();
+            uiRunner.start();
             while(true) {
                 try {
                     numBytes = mmInStream.read(mmBuffer);
                     String stringMessage = new String(mmBuffer, 0, numBytes);
-                    Message readMsg = bluetoothRead.obtainMessage(DATA_IN, numBytes, -1, stringMessage);
-                    bluetoothRead.sendMessage(readMsg);
+                    SensorData newData = new SensorData(stringMessage);
+                    sensorDataBuffer.put(newData);
+                    Log.d("Buffer", "Buffer Status: " + sensorDataBuffer.toString());
+
                 } catch(IOException e){
                     Log.d(TAG, "Input stream disconnected", e);
                     break;
+                }
+                catch(InterruptedException e){
+                    Log.e(TAG, "Error in placing message to queue");
+
+                }
+                catch(NullPointerException e){
+                    Log.e(TAG, "Tried to put null object in queue", e);
                 }
             }
         }
