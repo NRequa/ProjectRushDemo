@@ -8,6 +8,7 @@ import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothSocket;
 import android.content.Intent;
+import android.hardware.Sensor;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -54,12 +55,17 @@ public class MainActivity extends AppCompatActivity {
     private double generatedIndex = 0;
     private final String TAG = "MainActivity";
     private final String address = "AC:EE:9E:63:FB:8B"; // MAC address for my other android device, replace with HC-05 address in final version
+
+
     public UUID MY_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
-    public int DATA_IN = 1;
+    private final int DATA_IN = 1;
+    private final int UPLOAD_CHANGE = 2;
     public static Handler bluetoothRead;
     private Runnable updateEntries;
     int postNum;
     public LinkedBlockingQueue<SensorData> sensorDataBuffer;
+    public LinkedBlockingQueue<SensorData> sensorDataDisplay;
+    private SensorData submitHolder;
 
 
     @SuppressLint("HandlerLeak")
@@ -67,32 +73,22 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
         sensorDataBuffer = new LinkedBlockingQueue<SensorData>();
+        sensorDataDisplay = new LinkedBlockingQueue<SensorData>();
 
         // Create handler to update UI and store data
         bluetoothRead = new Handler() {
             public void handleMessage(Message msg){
                 if(msg.what == DATA_IN){
-                    // Supposed format of JSON string
-                    //{
-                    //  "TimeStamp": 442,
-                    //  "Sp02": 12,
-                    //  "PPG_HR": 24.36,
-                    //  "BodyTemperature": 24.35,
-                    //  "ECG": 509
-                    //}
-                    // JSON obect to JSON string format:
-                    /*
-                        String sensorJSON = (String) msg.obj;
-                        Log.d("SensorGot", sensorJSON );
-                        SensorData sensorData = new SensorData(sensorJSON);
-                        Log.d("SensorGet", "Sensor JSON : " + sensorData);
-                */
                         SensorData sensorData = (SensorData) msg.obj;
                         addEntries(sensorData);
-
-
-
+                }
+                else if(msg.what == UPLOAD_CHANGE){
+                    SensorData newUpload = (SensorData) msg.obj;
+                    if(msg.obj != null) {
+                        updateToUpload(newUpload);
+                    }
                 }
             }
         };
@@ -179,7 +175,11 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
+    public void updateToUpload(SensorData data){
+        TextView uploadDisplay = (TextView) findViewById(R.id.averageDisplay);
+        uploadDisplay.setText(data.toString());
 
+    }
     public void getAverages(View view) {
         final TextView avgDisplay = (TextView) findViewById(R.id.averageDisplay);
 
@@ -193,7 +193,7 @@ public class MainActivity extends AppCompatActivity {
                     @Override
                     public void onResponse(String response) {
                         avgDisplay.setText("Response: " + response);
-                        displayAverage(response);
+                        //displayAverage(response);
                     }
                 }, new Response.ErrorListener() {
             @Override
@@ -241,24 +241,18 @@ public class MainActivity extends AppCompatActivity {
             // From https://developer.android.com/training/volley/simple
             // https://stackoverflow.com/questions/33573803/how-to-send-a-post-request-using-volley-with-string-body
             RequestQueue queue = Volley.newRequestQueue(this);
-            String url = "http://projrush-env.takuddxgcj.us-east-2.elasticbeanstalk.com/User";
+            String url = "http://projrush-env.takuddxgcj.us-east-2.elasticbeanstalk.com/uploadData";
             String indexValue = indexSubmit.getText().toString();
 
             // Only need to define index
-            JSONObject jsonBody = new JSONObject();
-            jsonBody.put("index", indexSubmit.getText().toString());
-            final String requestBody = jsonBody.toString();
+            final String requestBody = submitHolder.dataString;
+            Log.d("VOLLEY", requestBody);
 
             StringRequest stringRequest = new StringRequest(Request.Method.POST, url, new Response.Listener<String>() {
                 @Override
                 public void onResponse(String response) {
                     Log.i("VOLLEY", response);
                     submissionNotify.show();
-
-                    // Set new index for submission
-                    double generatedIndex = ThreadLocalRandom.current().nextDouble(0,100);
-                    generatedIndex = Math.round(generatedIndex);
-                    indexSubmit.setText(Double.toString(generatedIndex));
                 }
             }, new Response.ErrorListener() {
                 @Override
@@ -294,7 +288,7 @@ public class MainActivity extends AppCompatActivity {
             };
 
             queue.add(stringRequest);
-        } catch (JSONException e) {
+        } catch (Exception e) {
             e.printStackTrace();
         }
 
@@ -310,19 +304,42 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private class DataGrabber extends Thread{
+        @Override
+        public void run(){
+            String dummyMsg = "{TimeStamp:1234, Sp02:12.32, PPG_HR:24.36, BodyTemperature:24.35, ECG:509}";
+            try {
+                sensorDataDisplay.put(new SensorData(dummyMsg));
+            } catch(InterruptedException e){};
+
+            while(true){
+                SensorData uploadData = sensorDataDisplay.poll();
+                submitHolder = uploadData;
+                Message displayUpdate = bluetoothRead.obtainMessage(UPLOAD_CHANGE, uploadData);
+                bluetoothRead.sendMessage(displayUpdate);
+                try {
+                    Thread.sleep(2000);
+                } catch(InterruptedException e){
+                    Log.e(TAG, "Update display info got interrupted.", e);
+                }
+            }
+
+        }
+    }
+
     // Handles retrieving sensor data and updating the
     private class BufferReader extends Thread{
         @Override
         public void run() {
-            int timer = 0;
             while(true){
-                SensorData graphSensorInfo = sensorDataBuffer.poll();
-                if(graphSensorInfo != null) {
-                    Log.d("Buffer", "Sensor Data from Q: " + graphSensorInfo.toString());
-                }
-                Message readMsg = bluetoothRead.obtainMessage(DATA_IN, graphSensorInfo);
-                bluetoothRead.sendMessage(readMsg);
-                try {
+                try{
+                    SensorData graphSensorInfo = sensorDataBuffer.poll();
+                    if(graphSensorInfo != null) {
+                        Log.d("Buffer", "Sensor Data from Q: " + graphSensorInfo.toString());
+                        sensorDataDisplay.put(graphSensorInfo);
+                    }
+                    Message readMsg = bluetoothRead.obtainMessage(DATA_IN, graphSensorInfo);
+                    bluetoothRead.sendMessage(readMsg);
                     Thread.sleep(180);
                 } catch(InterruptedException e){
                     Log.e(TAG, "Buffer reader thread interrupted.", e);
@@ -333,6 +350,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    // Handles connecting to bluetooth device
     private class ConnectThread extends Thread{
         private final BluetoothSocket mmSocket;
         private final BluetoothDevice mmDevice;
@@ -386,6 +404,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    // Handles the connection to a bluetooth device once made
     private class ConnectedThread extends Thread {
         private final BluetoothSocket mmSocket;
         private final InputStream mmInStream;
@@ -417,7 +436,10 @@ public class MainActivity extends AppCompatActivity {
             mmBuffer = new byte[1024];
             int numBytes;
             BufferReader uiRunner = new BufferReader();
+            DataGrabber grab = new DataGrabber();
             uiRunner.start();
+            grab.start();
+
             while(true) {
                 try {
                     numBytes = mmInStream.read(mmBuffer);
