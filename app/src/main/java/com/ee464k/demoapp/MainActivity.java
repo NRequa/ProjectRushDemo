@@ -68,6 +68,7 @@ public class MainActivity extends AppCompatActivity {
     private SensorData submitHolder;
 
 
+
     @SuppressLint("HandlerLeak")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
