@@ -207,6 +207,7 @@ public class MainActivity extends AppCompatActivity {
         queue.add(stringRequest);
     }
 
+    /*
     public void displayAverage(String result){
         // JSON with all our data to average
         final TextView avgDisplay = (TextView) findViewById(R.id.averageView);
@@ -229,6 +230,8 @@ public class MainActivity extends AppCompatActivity {
 
 
     }
+
+     */
 
 
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
