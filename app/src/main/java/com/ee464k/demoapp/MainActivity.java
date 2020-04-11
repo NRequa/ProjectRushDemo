@@ -55,7 +55,9 @@ public class MainActivity extends AppCompatActivity {
     private double generatedIndex = 0;
     private final String TAG = "MainActivity";
     private final String address = "AC:EE:9E:63:FB:8B"; // MAC address for my other android device, replace with HC-05 address in final version
+   // private final String address = "00:14:03:06:33:40"; // MAC address for Kenneth's HC-05
 
+    private SensorData previousSensorData;
 
     public UUID MY_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
     private final int DATA_IN = 1;
@@ -311,7 +313,7 @@ public class MainActivity extends AppCompatActivity {
     private class DataGrabber extends Thread{
         @Override
         public void run(){
-            String dummyMsg = "{TimeStamp:1234, Sp02:12.32, PPG_HR:24.36, BodyTemperature:24.35, ECG:509}";
+            String dummyMsg = "{timestamp:1234, spO2:12.32, ppg_hr:24.36, bodyTemp:24.35, ecg:509}";
             try {
                 sensorDataDisplay.put(new SensorData(dummyMsg));
             } catch(InterruptedException e){};
@@ -449,8 +451,17 @@ public class MainActivity extends AppCompatActivity {
                     numBytes = mmInStream.read(mmBuffer);
                     String stringMessage = new String(mmBuffer, 0, numBytes);
                     SensorData newData = new SensorData(stringMessage);
+
+                    if(!newData.goodMsg){
+                        newData = previousSensorData;
+                    }
+                    else{
+                        previousSensorData = newData;
+                    }
+
                     sensorDataBuffer.put(newData);
                     Log.d("Buffer", "Buffer Status: " + sensorDataBuffer.toString());
+                    Thread.sleep(100);
 
                 } catch(IOException e){
                     Log.d(TAG, "Input stream disconnected", e);

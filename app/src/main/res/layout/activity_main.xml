@@ -78,19 +78,19 @@
                 android:id="@+id/spo2"
                 android:layout_width="match_parent"
                 android:layout_height="204dp"
-                android:layout_marginLeft="10dp" />
+                android:layout_marginLeft="50dp" />
 
             <com.jjoe64.graphview.GraphView
                 android:id="@+id/ppg_hr"
                 android:layout_width="match_parent"
                 android:layout_height="200dip"
-                android:layout_marginLeft="10dp" />
+                android:layout_marginLeft="50dp" />
 
             <com.jjoe64.graphview.GraphView
                 android:id="@+id/bodytemp"
                 android:layout_width="match_parent"
                 android:layout_height="200dip"
-                android:layout_marginLeft="10dp" />
+                android:layout_marginLeft="50dp" />
 
             <com.jjoe64.graphview.GraphView
                 android:id="@+id/ecg"

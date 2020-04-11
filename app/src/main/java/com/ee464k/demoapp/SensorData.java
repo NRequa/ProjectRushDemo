@@ -13,8 +13,10 @@ public class SensorData {
     public int ecg;
     JSONObject dataJSON;
     String dataString;
+    boolean goodMsg = true;
 
     public SensorData(String message){
+        goodMsg = true;
         // Convert string to JSON Object
         try {
             String cleanMsg = trimMessage(message);
@@ -43,7 +45,8 @@ public class SensorData {
             return midString.substring(0, endPt + 1);
         } catch (IndexOutOfBoundsException e){
             // Something went very wrong, just set to 0 for this pt
-            return "{TimeStamp: 0, Sp02: 0, PPG_HR: 0, BodyTemperature: 0, ECG: 0}";
+            this.goodMsg = false;
+            return null;
         }
     }
 
