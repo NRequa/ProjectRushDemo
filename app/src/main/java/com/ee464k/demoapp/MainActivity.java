@@ -43,6 +43,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.UnsupportedEncodingException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -55,7 +57,7 @@ public class MainActivity extends AppCompatActivity {
     private double generatedIndex = 0;
     private final String TAG = "MainActivity";
     private final String address = "AC:EE:9E:63:FB:8B"; // MAC address for my other android device, replace with HC-05 address in final version
-   // private final String address = "00:14:03:06:33:40"; // MAC address for Kenneth's HC-05
+    //private final String address = "00:14:03:06:33:40"; // MAC address for Kenneth's HC-05
 
     private SensorData previousSensorData;
 
@@ -63,11 +65,12 @@ public class MainActivity extends AppCompatActivity {
     private final int DATA_IN = 1;
     private final int UPLOAD_CHANGE = 2;
     public static Handler bluetoothRead;
-    private Runnable updateEntries;
-    int postNum;
+
     public LinkedBlockingQueue<SensorData> sensorDataBuffer;
     public LinkedBlockingQueue<SensorData> sensorDataDisplay;
-    private SensorData submitHolder;
+    public LinkedBlockingQueue sessionData = new LinkedBlockingQueue<>();
+    public SensorAverages sessionStats;
+    public boolean sessionActive = true;
 
 
 
@@ -235,10 +238,71 @@ public class MainActivity extends AppCompatActivity {
 
      */
 
+    public void submitSessionAverage(View view){
+        final Toast submissionNotify = Toast.makeText(this, "Profile stats submitted", Toast.LENGTH_SHORT);
+        final Toast errorNotify = Toast.makeText(this, "Submission error", Toast.LENGTH_SHORT);
+        final TextView indexSubmit = (TextView) findViewById(R.id.indexDisplay);
+        sessionActive = false;
+
+        try {
+            // From https://developer.android.com/training/volley/simple
+            // https://stackoverflow.com/questions/33573803/how-to-send-a-post-request-using-volley-with-string-body
+            RequestQueue queue = Volley.newRequestQueue(this);
+            String url = "http://projrush-env.takuddxgcj.us-east-2.elasticbeanstalk.com/uploadStats";
+
+            // Only need to define index
+            final String requestBody = sessionStats.toString();
+            Log.d("VOLLEY", requestBody);
+
+            StringRequest stringRequest = new StringRequest(Request.Method.POST, url, new Response.Listener<String>() {
+                @Override
+                public void onResponse(String response) {
+                    Log.i("VOLLEY", response);
+                    submissionNotify.show();
+                }
+            }, new Response.ErrorListener() {
+                @Override
+                public void onErrorResponse(VolleyError error) {
+                    Log.e("VOLLEY", error.toString());
+                    errorNotify.show();
+                }
+            }) {
+                @Override
+                public String getBodyContentType() {
+                    return "application/json; charset=utf-8";
+                }
+
+                @Override
+                public byte[] getBody() throws AuthFailureError {
+                    try {
+                        return requestBody == null ? null : requestBody.getBytes("utf-8");
+                    } catch (UnsupportedEncodingException uee) {
+                        VolleyLog.wtf("Unsupported Encoding while trying to get the bytes of %s using %s", requestBody, "utf-8");
+                        return null;
+                    }
+                }
+
+                @Override
+                protected Response<String> parseNetworkResponse(NetworkResponse response) {
+                    String responseString = "";
+                    if (response != null) {
+                        responseString = String.valueOf(response.statusCode);
+                        // can get more details such as response.headers
+                    }
+                    return Response.success(responseString, HttpHeaderParser.parseCacheHeaders(response));
+                }
+            };
+
+            queue.add(stringRequest);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+    }
 
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     public void submitSession(View view){
-        final Toast submissionNotify = Toast.makeText(this, "Profile submitted", Toast.LENGTH_SHORT);
+        final Toast submissionNotify = Toast.makeText(this, "Session data submitted", Toast.LENGTH_SHORT);
         final Toast errorNotify = Toast.makeText(this, "Submission error", Toast.LENGTH_SHORT);
         final TextView indexSubmit = (TextView) findViewById(R.id.indexDisplay);
 
@@ -247,11 +311,12 @@ public class MainActivity extends AppCompatActivity {
             // From https://developer.android.com/training/volley/simple
             // https://stackoverflow.com/questions/33573803/how-to-send-a-post-request-using-volley-with-string-body
             RequestQueue queue = Volley.newRequestQueue(this);
-            String url = "http://projrush-env.takuddxgcj.us-east-2.elasticbeanstalk.com/uploadData";
-            String indexValue = indexSubmit.getText().toString();
+            String url = "http://projrush-env.takuddxgcj.us-east-2.elasticbeanstalk.com/uploadSession";
 
             // Only need to define index
-            final String requestBody = submitHolder.dataString;
+            Log.d("SENSORSTATS", sessionData.toString());
+            final String requestBody = sessionData.toString();
+            sessionData.clear();
             Log.d("VOLLEY", requestBody);
 
             StringRequest stringRequest = new StringRequest(Request.Method.POST, url, new Response.Listener<String>() {
@@ -310,24 +375,23 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    // Thread to handle stat calculation during a session.
     private class DataGrabber extends Thread{
         @Override
         public void run(){
-            String dummyMsg = "{timestamp:1234, spO2:12.32, ppg_hr:24.36, bodyTemp:24.35, ecg:509}";
-            try {
-                sensorDataDisplay.put(new SensorData(dummyMsg));
-            } catch(InterruptedException e){};
+            SensorAverages sensorStats = new SensorAverages();
 
-            while(true){
-                SensorData uploadData = sensorDataDisplay.poll();
-                submitHolder = uploadData;
-                Message displayUpdate = bluetoothRead.obtainMessage(UPLOAD_CHANGE, uploadData);
-                bluetoothRead.sendMessage(displayUpdate);
+            while(true && sessionActive){
                 try {
-                    Thread.sleep(2000);
+                    SensorData uploadData = sensorDataDisplay.take();
+                    Log.d("SENSORSTATS", "Upload data: " + uploadData.toString());
+                    sensorStats.updateStats(uploadData);
+                    Log.d("SENSORSTATS", sensorStats.toString());
+                    sessionStats = sensorStats;
                 } catch(InterruptedException e){
-                    Log.e(TAG, "Update display info got interrupted.", e);
+                    Log.e(TAG, "Interrupted while getting buffer info",e);
                 }
+
             }
 
         }
@@ -338,7 +402,7 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void run() {
             while(true){
-                try{
+            try{
                     SensorData graphSensorInfo = sensorDataBuffer.poll();
                     if(graphSensorInfo != null) {
                         Log.d("Buffer", "Sensor Data from Q: " + graphSensorInfo.toString());
@@ -452,7 +516,7 @@ public class MainActivity extends AppCompatActivity {
                     String stringMessage = new String(mmBuffer, 0, numBytes);
                     SensorData newData = new SensorData(stringMessage);
 
-                    if(!newData.goodMsg){
+                    if(!newData.goodMsg || newData.timestamp == 0){
                         newData = previousSensorData;
                     }
                     else{
@@ -460,6 +524,11 @@ public class MainActivity extends AppCompatActivity {
                     }
 
                     sensorDataBuffer.put(newData);
+                    if(sessionData.size() < 50) {
+                        sessionData.put(newData);
+                    }
+
+
                     Log.d("Buffer", "Buffer Status: " + sensorDataBuffer.toString());
                     Thread.sleep(100);
 

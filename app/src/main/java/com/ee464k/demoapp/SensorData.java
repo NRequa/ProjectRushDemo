@@ -5,13 +5,16 @@ import android.util.Log;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public class SensorData {
     public int timestamp;
     public double spo2;
     public double ppg_hr;
     public double bodytemp;
     public int ecg;
-    JSONObject dataJSON;
+    public List<Double> dataPtList;
     String dataString;
     boolean goodMsg = true;
 
@@ -28,6 +31,13 @@ public class SensorData {
             this.ppg_hr = dataJson.getDouble("ppg_hr");
             this.bodytemp = dataJson.getDouble("bodyTemp");
             this.ecg = dataJson.getInt("ecg");
+
+            // Set up list for stats calculations.
+            dataPtList = new ArrayList<Double>();
+            dataPtList.add(spo2);
+            dataPtList.add(ppg_hr);
+            dataPtList.add(bodytemp);
+            dataPtList.add((double) ecg);
         } catch(JSONException e){
             Log.e("SENSORDATA", "Couldn't parse JSON object", e);
         }
@@ -56,6 +66,6 @@ public class SensorData {
         if(this == null){
             return "NULL";
         }
-        return "{timestamp: " + timestamp + ", spO2: " + spo2 + ", ppg_hr: " + ppg_hr + ", bodyTemp: " + bodytemp + ", ecg: " + ecg + "}";
+        return "{\"timestamp\": " + timestamp + ", \"spO2\": " + spo2 + ", \"ppg_hr\": " + ppg_hr + ", \"bodyTemp\": " + bodytemp + ", \"ecg\": " + ecg + "}";
     }
 }
