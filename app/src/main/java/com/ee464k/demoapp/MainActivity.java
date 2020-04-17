@@ -1,24 +1,23 @@
 package com.ee464k.demoapp;
 
-import androidx.annotation.RequiresApi;
-import androidx.appcompat.app.AppCompatActivity;
-
+import com.ee464k.demoapp.R;
 import android.annotation.SuppressLint;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothSocket;
 import android.content.Intent;
-import android.hardware.Sensor;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
 import android.util.Log;
 import android.view.View;
-import android.widget.Button;
-import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import androidx.annotation.RequiresApi;
+import androidx.appcompat.app.AppCompatActivity;
 
 import com.android.volley.AuthFailureError;
 import com.android.volley.NetworkResponse;
@@ -35,7 +34,6 @@ import com.jjoe64.graphview.Viewport;
 import com.jjoe64.graphview.series.DataPoint;
 import com.jjoe64.graphview.series.LineGraphSeries;
 
-import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -43,15 +41,11 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.UnsupportedEncodingException;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ThreadLocalRandom;
 
 public class MainActivity extends AppCompatActivity {
-
     private LineGraphSeries<DataPoint> spo2_series, ppg_series, bodytemp_series, ecg_series;
     private int lastX = 0;
     private double generatedIndex = 0;
@@ -63,7 +57,8 @@ public class MainActivity extends AppCompatActivity {
 
     public UUID MY_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
     private final int DATA_IN = 1;
-    private final int UPLOAD_CHANGE = 2;
+    private final int FITNESS_OK = 2;
+    private final int FITNESS_BAD = 3;
     public static Handler bluetoothRead;
 
     public LinkedBlockingQueue<SensorData> sensorDataBuffer;
@@ -71,6 +66,9 @@ public class MainActivity extends AppCompatActivity {
     public LinkedBlockingQueue sessionData = new LinkedBlockingQueue<>();
     public SensorAverages sessionStats;
     public boolean sessionActive = true;
+
+    ImageView image;
+
 
 
 
@@ -90,11 +88,11 @@ public class MainActivity extends AppCompatActivity {
                         SensorData sensorData = (SensorData) msg.obj;
                         addEntries(sensorData);
                 }
-                else if(msg.what == UPLOAD_CHANGE){
-                    SensorData newUpload = (SensorData) msg.obj;
-                    if(msg.obj != null) {
-                        updateToUpload(newUpload);
-                    }
+                else if(msg.what == FITNESS_OK){
+                    image.setImageResource(R.drawable.okmessage);
+                }
+                else if(msg.what == FITNESS_BAD){
+                    image.setImageResource(R.drawable.okbadmessage);
                 }
             }
         };
@@ -117,17 +115,20 @@ public class MainActivity extends AppCompatActivity {
         BluetoothDevice device = BTsetup.getDevice();
         Log.d("BluetoothConnect", "Device connected is : " + device.getName());
 
+        // Get imageView
+        image = (ImageView) findViewById(R.id.imageView);
+
 
         // Get all the graph views
         GraphView spo2_graph = (GraphView) findViewById(R.id.spo2);
         GraphView ppg_graph = (GraphView) findViewById(R.id.ppg_hr);
         GraphView bodytemp_graph = (GraphView) findViewById(R.id.bodytemp);
         GraphView ecg_graph = (GraphView) findViewById(R.id.ecg);
-
         // Set up each graph w/ it's series
         spo2_graph.setTitle("SPO2");
         spo2_series = new LineGraphSeries<>();
         spo2_graph.addSeries(spo2_series);
+
 
         ppg_graph.setTitle("PPG");
         ppg_series = new LineGraphSeries<>();
@@ -166,9 +167,8 @@ public class MainActivity extends AppCompatActivity {
         ecgviewport.setMaxX(10);
         ecgviewport.setScrollable(true);
 
-        // Set index
-        final TextView indexSubmit = (TextView) findViewById(R.id.indexDisplay);
-        indexSubmit.setText(Double.toString(generatedIndex));
+        // Get global stats for this session
+        getAverages();
 
         // Start BT connection
         ConnectThread connect = new ConnectThread(device);
@@ -182,61 +182,34 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public void updateToUpload(SensorData data){
-        TextView uploadDisplay = (TextView) findViewById(R.id.averageDisplay);
-        uploadDisplay.setText(data.toString());
-
     }
-    public void getAverages(View view) {
-        final TextView avgDisplay = (TextView) findViewById(R.id.averageDisplay);
 
+    JSONObject recentAverages;
+
+    public void getAverages() {
         // From https://developer.android.com/training/volley/simple
         RequestQueue queue = Volley.newRequestQueue(this);
-        String url = "http://projrush-env.takuddxgcj.us-east-2.elasticbeanstalk.com/Average";
+        String url = "http://projrush-env.takuddxgcj.us-east-2.elasticbeanstalk.com/getGlobalStats";
 
         // Request builder
         StringRequest stringRequest = new StringRequest(Request.Method.GET, url,
                 new Response.Listener<String>() {
                     @Override
                     public void onResponse(String response) {
-                        avgDisplay.setText("Response: " + response);
-                        //displayAverage(response);
+                        try {
+                            recentAverages = new JSONObject(response);
+                        } catch (JSONException e){};
                     }
                 }, new Response.ErrorListener() {
             @Override
             public void onErrorResponse(VolleyError error) {
-                avgDisplay.setText(error.toString());
+
             }
 
         });
 
         queue.add(stringRequest);
     }
-
-    /*
-    public void displayAverage(String result){
-        // JSON with all our data to average
-        final TextView avgDisplay = (TextView) findViewById(R.id.averageView);
-        try {
-            JSONArray dataList = new JSONArray(result);
-             double sum = 0;
-            for(int i = 0; i < dataList.length(); i++){
-                JSONObject dataPt = dataList.getJSONObject(i);
-                double indexVal = dataPt.getDouble("index");
-                sum += indexVal;
-            }
-
-            double avg = Math.round(sum / dataList.length());
-            Log.d("DISPLAY", "displayAverage: " + avg);
-            avgDisplay.setText(Double.toString(avg));
-
-        } catch (JSONException e) {
-            e.printStackTrace();
-        }
-
-
-    }
-
-     */
 
     public void submitSessionAverage(View view){
         final Toast submissionNotify = Toast.makeText(this, "Profile stats submitted", Toast.LENGTH_SHORT);
@@ -379,7 +352,10 @@ public class MainActivity extends AppCompatActivity {
     private class DataGrabber extends Thread{
         @Override
         public void run(){
-            SensorAverages sensorStats = new SensorAverages();
+
+            SensorAverages sensorStats = new SensorAverages(recentAverages);
+            boolean outside_norm = false;
+            Message toggleMsg;
 
             while(true && sessionActive){
                 try {
@@ -388,8 +364,20 @@ public class MainActivity extends AppCompatActivity {
                     sensorStats.updateStats(uploadData);
                     Log.d("SENSORSTATS", sensorStats.toString());
                     sessionStats = sensorStats;
+                    if(sessionStats.fitnessScore > 3.8 && !outside_norm ){
+                        toggleMsg = bluetoothRead.obtainMessage(FITNESS_BAD);
+                        bluetoothRead.sendMessage(toggleMsg);
+                        outside_norm = true;
+                    }
+                    else if(sessionStats.fitnessScore < 3.8 && outside_norm){
+                        toggleMsg = bluetoothRead.obtainMessage(FITNESS_OK);
+                        bluetoothRead.sendMessage(toggleMsg);
+                        outside_norm = false;
+                    }
                 } catch(InterruptedException e){
                     Log.e(TAG, "Interrupted while getting buffer info",e);
+                } catch(JSONException e){
+                    Log.e(TAG, "Global JSON values get failed", e);
                 }
 
             }

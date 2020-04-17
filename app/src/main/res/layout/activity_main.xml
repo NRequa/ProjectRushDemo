@@ -29,16 +29,6 @@
         app:layout_constraintStart_toEndOf="@+id/postBtn" />
 
     <TextView
-        android:id="@+id/averageDisplay"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Full Response"
-        app:layout_constraintBottom_toTopOf="@+id/scrollView2"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
-
-    <TextView
         android:id="@+id/profileDisplay"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
@@ -99,5 +89,18 @@
                 android:layout_marginLeft="10dp" />
         </LinearLayout>
     </ScrollView>
+
+    <ImageView
+        android:id="@+id/imageView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="20dp"
+        app:layout_constraintBottom_toTopOf="@+id/scrollView2"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.498"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:srcCompat="@drawable/okmessage"
+        tools:srcCompat="@drawable/okmessage" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>
