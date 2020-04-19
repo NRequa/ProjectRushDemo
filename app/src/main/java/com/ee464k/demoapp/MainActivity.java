@@ -50,8 +50,8 @@ public class MainActivity extends AppCompatActivity {
     private int lastX = 0;
     private double generatedIndex = 0;
     private final String TAG = "MainActivity";
-    private final String address = "AC:EE:9E:63:FB:8B"; // MAC address for my other android device, replace with HC-05 address in final version
-    //private final String address = "00:14:03:06:33:40"; // MAC address for Kenneth's HC-05
+   // private final String address = "AC:EE:9E:63:FB:8B"; // MAC address for my other android device, replace with HC-05 address in final version
+    private final String address = "00:14:03:06:33:40"; // MAC address for Kenneth's HC-05
 
     private SensorData previousSensorData;
 
@@ -59,6 +59,7 @@ public class MainActivity extends AppCompatActivity {
     private final int DATA_IN = 1;
     private final int FITNESS_OK = 2;
     private final int FITNESS_BAD = 3;
+    private final int SUBMIT_DATA = 4;
     public static Handler bluetoothRead;
 
     public LinkedBlockingQueue<SensorData> sensorDataBuffer;
@@ -93,6 +94,9 @@ public class MainActivity extends AppCompatActivity {
                 }
                 else if(msg.what == FITNESS_BAD){
                     image.setImageResource(R.drawable.okbadmessage);
+                }
+                else if(msg.what == SUBMIT_DATA){
+                    submitSession();
                 }
             }
         };
@@ -181,8 +185,6 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
-    public void updateToUpload(SensorData data){
-    }
 
     JSONObject recentAverages;
 
@@ -225,7 +227,6 @@ public class MainActivity extends AppCompatActivity {
 
             // Only need to define index
             final String requestBody = sessionStats.toString();
-            Log.d("VOLLEY", requestBody);
 
             StringRequest stringRequest = new StringRequest(Request.Method.POST, url, new Response.Listener<String>() {
                 @Override
@@ -274,7 +275,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
-    public void submitSession(View view){
+    public void submitSession(){
         final Toast submissionNotify = Toast.makeText(this, "Session data submitted", Toast.LENGTH_SHORT);
         final Toast errorNotify = Toast.makeText(this, "Submission error", Toast.LENGTH_SHORT);
         final TextView indexSubmit = (TextView) findViewById(R.id.indexDisplay);
@@ -360,9 +361,9 @@ public class MainActivity extends AppCompatActivity {
             while(true && sessionActive){
                 try {
                     SensorData uploadData = sensorDataDisplay.take();
-                    Log.d("SENSORSTATS", "Upload data: " + uploadData.toString());
+              //      Log.d("SENSORSTATS", "Upload data: " + uploadData.toString());
                     sensorStats.updateStats(uploadData);
-                    Log.d("SENSORSTATS", sensorStats.toString());
+              //      Log.d("SENSORSTATS", sensorStats.toString());
                     sessionStats = sensorStats;
                     if(sessionStats.fitnessScore > 3.8 && !outside_norm ){
                         toggleMsg = bluetoothRead.obtainMessage(FITNESS_BAD);
@@ -385,7 +386,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    // Handles retrieving sensor data and updating the
+    // Handles retrieving sensor data
     private class BufferReader extends Thread{
         @Override
         public void run() {
@@ -393,7 +394,7 @@ public class MainActivity extends AppCompatActivity {
             try{
                     SensorData graphSensorInfo = sensorDataBuffer.poll();
                     if(graphSensorInfo != null) {
-                        Log.d("Buffer", "Sensor Data from Q: " + graphSensorInfo.toString());
+                   //     Log.d("Buffer", "Sensor Data from Q: " + graphSensorInfo.toString());
                         sensorDataDisplay.put(graphSensorInfo);
                     }
                     Message readMsg = bluetoothRead.obtainMessage(DATA_IN, graphSensorInfo);
@@ -490,6 +491,7 @@ public class MainActivity extends AppCompatActivity {
             mmOutStream = tmpOut;
         }
 
+        @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
         public void run(){
             mmBuffer = new byte[1024];
             int numBytes;
@@ -512,12 +514,16 @@ public class MainActivity extends AppCompatActivity {
                     }
 
                     sensorDataBuffer.put(newData);
-                    if(sessionData.size() < 50) {
+                    if(sessionData.size() < 100) {
                         sessionData.put(newData);
+                    }
+                    else{
+                        Message uploadData = bluetoothRead.obtainMessage(SUBMIT_DATA);
+                        bluetoothRead.sendMessage(uploadData);
                     }
 
 
-                    Log.d("Buffer", "Buffer Status: " + sensorDataBuffer.toString());
+               //     Log.d("Buffer", "Buffer Status: " + sensorDataBuffer.toString());
                     Thread.sleep(100);
 
                 } catch(IOException e){
