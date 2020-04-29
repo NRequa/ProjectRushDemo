@@ -84,16 +84,17 @@ public class MainActivity extends AppCompatActivity {
 
         // Create handler to update UI and store data
         bluetoothRead = new Handler() {
+            @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
             public void handleMessage(Message msg){
                 if(msg.what == DATA_IN){
                         SensorData sensorData = (SensorData) msg.obj;
                         addEntries(sensorData);
                 }
                 else if(msg.what == FITNESS_OK){
-                    image.setImageResource(R.drawable.okmessage);
+                    image.setImageResource(R.drawable.greenlight);
                 }
                 else if(msg.what == FITNESS_BAD){
-                    image.setImageResource(R.drawable.okbadmessage);
+                    image.setImageResource(R.drawable.redlight);
                 }
                 else if(msg.what == SUBMIT_DATA){
                     submitSession();
